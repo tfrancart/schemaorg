@@ -7,6 +7,7 @@ from google.appengine.ext import db
 from google.appengine.ext import blobstore
 from google.appengine.ext.webapp import blobstore_handlers
 import xml.etree.ElementTree as ET
+import datetime, time
 import logging
 import api
 
@@ -20,16 +21,19 @@ def MakeParserOfType (format, webapp):
 
 class ParseExampleFile :
 
-    def __init__ (self, webapp):
+    def __init__ (self, webapp, layer=""):
         logging.basicConfig(level=logging.INFO) # dev_appserver.py --log_level debug .
-
         self.webapp = webapp
+        self.layer = layer
+        self.file = ""
         self.initFields()
 
     def initFields(self):
         self.currentStr = []
         self.terms = []
         self.egmeta = {}
+        self.egmeta["layer"] = self.layer
+        self.egmeta["source"] = self.file
         self.preMarkupStr = ""
         self.microdataStr = ""
         self.rdfaStr = ""
@@ -50,48 +54,56 @@ class ParseExampleFile :
 
     def process_example_id(self, m):
         self.egmeta["id"] = m.group(1)
-        logging.debug("Storing ID: %s" % self.egmeta["id"] )
+        #logging.debug("Storing ID: %s" % self.egmeta["id"] )
         return ''
 
-    def parse (self, contents):
-        content = ""
+    def parse (self, file):
+        import codecs
+        self.file = file
         egid = re.compile("""#(\S+)\s+""")
-        for i in range(len(contents)):
-            content += contents[i]
-
+        #logging.info("[%s] Reading file %s" % (api.getInstanceId(short=True),file))
+        count = 0
+        start = datetime.datetime.now()
+        
+        fd = codecs.open(file, 'r', encoding="utf8")
+        content = fd.read()
+        fd.close()
         lines = re.split('\n|\r', content)
+        
         for line in lines:
             # Per-example sections begin with e.g.: 'TYPES: #music-2 Person, MusicComposition, Organization'
+            line = line.rstrip()
 
-            if ((len(line) > 6) and line[:6] == "TYPES:"):
+            if line.startswith("TYPES:"):
+                count += 1
                 self.nextPart('TYPES:')
-                logging.debug("About to call api.Example.AddExample with terms: %s " % "".join( [" ; %s " % t.id for t in self.terms] ) )
+                #logging.debug("About to call api.Example.AddExample with terms: %s " % "".join( [" ; %s " % t.id for t in self.terms] ) )
+                #Create example from what has neen previously collected
+                #If 1st call there will be no terms which will be regected and no xample created.
                 api.Example.AddExample(self.terms, self.preMarkupStr, self.microdataStr, self.rdfaStr, self.jsonStr, self.egmeta)
                 self.initFields()
                 typelist = re.split(':', line)
-                self.terms = []
-                self.egmeta = {}
-                logging.debug("TYPE INFO: '%s' " % line );
+                #logging.debug("TYPE INFO: '%s' " % line );
                 tdata = egid.sub(self.process_example_id, typelist[1]) # strips IDs, records them in egmeta["id"]
                 ttl = tdata.split(',')
                 for ttli in ttl:
                     ttli = re.sub(' ', '', ttli)
-                    logging.debug("TTLI: %s " % ttli); # danbri tmp
-                    self.terms.append(api.Unit.GetUnit(ttli, True))
+                    #logging.debug("TTLI: %s " % ttli); # danbri tmp
+                    if len(ttli) and "@@" not in ttli:
+                        self.terms.append(ttli)
             else:
                 tokens = ["PRE-MARKUP:", "MICRODATA:", "RDFA:", "JSON:"]
                 for tk in tokens:
                     ltk = len(tk)
-                    if (len(line) > ltk-1 and line[:ltk] == tk):
+                    if line.startswith(tk):
                         self.nextPart(tk)
                         line = line[ltk:]
                 if (len(line) > 0):
                     self.currentStr.append(line + "\n")
         self.nextPart('TYPES:') # should flush on each block of examples
+        count += 1
         api.Example.AddExample(self.terms, self.preMarkupStr, self.microdataStr, self.rdfaStr, self.jsonStr, self.egmeta) # should flush last one
-        #logging.info("Final AddExample called with terms %s " % self.terms)
-        for t in self.terms:
-            logging.debug("Adding %s" % "".join( [" ; %s " % t.id for t in self.terms] ) )
+        #logging.info ("%s [%s] examples in %s" % (count,datetime.datetime.now() - start, file))
 
 
 class UsageFileParser:
@@ -106,12 +118,7 @@ class UsageFileParser:
             if (len(parts) == 2):
                 unitstr = parts[0].strip()
                 count = parts[1]
-                node = api.Unit.GetUnit(unitstr, False)
-                if (node == None):
-                    logging.debug("'%s' stat. does not have a node" % unitstr)
-                else:
-                    node.setUsage(count)
-
+                api.StoreUsage(unitstr, count)
 
 class RDFAParser :
 
@@ -150,9 +157,9 @@ class RDFAParser :
         property = elem.get('property')
         text = elem.text
         if (property != None):
-            if property == "rdf:type":
-              property = "typeOf" # some crude normalization, since we aren't a real rdfa parser.
-              logging.info("normalized rdf:type to typeOf internally. value is: %s" % href )
+#            if property == "rdf:type":
+#              property = "typeOf" # some crude normalization, since we aren't a real rdfa parser.
+#              logging.info("normalized rdf:type to typeOf internally. value is: %s" % href )
             property = api.Unit.GetUnit(self.stripID(property), True)
             if (href != None) :
                 href = api.Unit.GetUnit(self.stripID(href), True)

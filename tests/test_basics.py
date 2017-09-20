@@ -3,11 +3,13 @@ import os
 import logging # https://docs.python.org/2/library/logging.html#logging-levels
 import sys
 sys.path.append( os.getcwd() )
+sys.path.insert( 1, 'lib' ) #Pickup libs, rdflib etc., from shipped lib directory
 
-#from api import *
-from parsers import *
 from api import extensionsLoaded, extensionLoadErrors
 from api import setInTestHarness, getInTestHarness
+from api import EXAMPLESMAP, Triple
+from apimarkdown import Markdown
+
 from google.appengine.ext import deferred 
 
 #Setup testharness state BEFORE importing sdoapp
@@ -46,12 +48,10 @@ class SDOBasicsTestCase(unittest.TestCase):
     self.assertEqual(True, os.path.exists(examples_path), "Expected examples file: "+ examples_path )
 
   def test_ExtractedPlausibleNumberOfExamples(self):
-    # Note: Example constructor registers each example per-term: term.examples.append(self)
-    all_types = GetAllTypes()
-    example_count = 0
-    for t in all_types:
-      if t.examples and len(t.examples) > 0:
-        example_count = example_count + len(t.examples)
+
+    example_count = len(EXAMPLESMAP)
+#    for t in api.EXAMPLESMAP:
+#        example_count = example_count + len(t)
     log.info("Extracted %s examples." % example_count )
     self.assertTrue(example_count > 300 and example_count < 500, "Expect that we extracted 300 < x < 500 examples from data/*examples.txt. Found: %s " % example_count)
 
@@ -100,8 +100,8 @@ class TriplesBasicAPITestCase(unittest.TestCase):
 
      u_Volcano = Unit.GetUnit("Volcano", createp=True)
      p_name = Unit.GetUnit("name", createp=True)
-     api.Triple.AddTripleText(u_Volcano, p_name, "foo", layer="neogeo") # last arg is 'layer' aka extension
-     api.Triple.AddTripleText(u_Volcano, p_name, "bar", "neogeo") # show both syntax options 
+     Triple.AddTripleText(u_Volcano, p_name, "foo", layer="neogeo") # last arg is 'layer' aka extension
+     Triple.AddTripleText(u_Volcano, p_name, "bar", "neogeo") # show both syntax options 
 
      try:
        v_names = GetTargets( p_name, u_Volcano, "neogeo")
@@ -120,8 +120,8 @@ class TriplesBasicAPITestCase(unittest.TestCase):
 
      u_Volcano = Unit.GetUnit("Volcano", createp=True)
      p_name = Unit.GetUnit("name", createp=True)
-     api.Triple.AddTripleText(u_Volcano, p_name, "foo", "neogeo")#   , "neogeo") # last arg is 'layer' aka extension
-     api.Triple.AddTripleText(u_Volcano, p_name, "bar", "neogeo")#   , "neogeo") # can we add two triples w/ same property?
+     Triple.AddTripleText(u_Volcano, p_name, "foo", "neogeo")#   , "neogeo") # last arg is 'layer' aka extension
+     Triple.AddTripleText(u_Volcano, p_name, "bar", "neogeo")#   , "neogeo") # can we add two triples w/ same property?
      try:
        v_names = GetTargets( p_name, u_Volcano, layers='core' )
        log.info("Looking for: Volcano's 'name' property values, 'foo' and 'bar'. counted: %s" % len(v_names) )
@@ -173,79 +173,79 @@ class SchemaBasicAPITestCase(unittest.TestCase):
       self.assertEqual( getHostExt(), "", "host_ext should be empty for host localhost.")
       self.assertEqual( getBaseHost(), "localhost", "baseHost should be 'schema.org' for host schema.org.")
       self.assertEqual( getHostPort(), "80", "HostPort should be '80' for host localhost.")
-      self.assertEqual( makeUrl("tst"), "http://tst.localhost", "URL should be 'http://tst.localhost' for host localhost.")
+      self.assertEqual( makeUrl("tst", full=True), "http://tst.localhost", "URL should be 'http://tst.localhost' for host localhost.")
       
       u.setupHostinfo(thing,"bib.localhost")
       self.assertEqual( getHostExt(), "bib", "host_ext should be 'bib' for host bib.localhost.")
       self.assertEqual( getBaseHost(), "localhost", "baseHost should be 'localhost' for host bib.localhost.")
       self.assertEqual( getHostPort(), "80", "HostPort should be '80' for host localhost.")
-      self.assertEqual( makeUrl("tst"), "http://tst.localhost", "URL should be 'http://tst.localhost' for host bib.localhost.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.localhost", "URL should be 'http://tst.localhost' for host bib.localhost.")
 
       u.setupHostinfo(thing,"bib.localhost:8080")
       self.assertEqual( getHostExt(), "bib", "host_ext should be 'bib' for host bib.localhost:8080.")
       self.assertEqual( getBaseHost(), "localhost", "baseHost should be 'localhost' for host bib.localhost:8080.")
       self.assertEqual( getHostPort(), "8080", "HostPort should be '8080' for host bib.localhost:8080.")
-      self.assertEqual( makeUrl("tst"), "http://tst.localhost:8080", "URL should be 'http://tst.localhost:8080' for host bib.localhost:8080.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.localhost:8080", "URL should be 'http://tst.localhost:8080' for host bib.localhost:8080.")
 
       u.setupHostinfo(thing,"fred.localhost:8080")
       self.assertEqual( getHostExt(), "", "host_ext should be empty for host fred.localhost:8080.")
       self.assertEqual( getBaseHost(), "fred.localhost", "baseHost should be 'fred.localhost' for host fred.localhost:8080.")
       self.assertEqual( getHostPort(), "8080", "HostPort should be '8080' for host fred.localhost:8080.")
-      self.assertEqual( makeUrl("tst"), "http://tst.fred.localhost:8080", "URL should be 'http://tst.fred.localhost:8080' for host fred.localhost:8080.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.fred.localhost:8080", "URL should be 'http://tst.fred.localhost:8080' for host fred.localhost:8080.")
 
       u.setupHostinfo(thing,"schema.org")
       self.assertEqual( getHostExt(), "", "host_ext should be empty for host schema.org.")
       self.assertEqual( getBaseHost(), "schema.org", "baseHost should be 'schema.org' for host schema.org.")
       self.assertEqual( getHostPort(), "80", "HostPort should be '80' for host schema.org.")
-      self.assertEqual( makeUrl("tst"), "http://tst.schema.org", "URL should be 'http://tst.schema.org' for host schema.org.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.schema.org", "URL should be 'http://tst.schema.org' for host schema.org.")
       
       u.setupHostinfo(thing,"bib.schema.org")
       self.assertEqual( getHostExt(), "bib", "host_ext should be 'bib' for host bib.schema.org.")
       self.assertEqual( getBaseHost(), "schema.org", "baseHost should be 'bib.schema.org' for host schema.org.")
       self.assertEqual( getHostPort(), "80", "HostPort should be '80' for host bib.schema.org.")
-      self.assertEqual( makeUrl("tst"), "http://tst.schema.org", "URL should be 'http://tst.schema.org' for host bib.schema.org.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.schema.org", "URL should be 'http://tst.schema.org' for host bib.schema.org.")
 
       u.setupHostinfo(thing,"fred.schema.org:8080")
       self.assertEqual( getHostExt(), "", "host_ext should be empty for host fred.schema.org:8080.")
       self.assertEqual( getBaseHost(), "fred.schema.org", "baseHost should be 'fred.schema.org' for host fred.schema.org:8080.")
       self.assertEqual( getHostPort(), "8080", "HostPort should be '8080' for host fred.schema.org:8080.")
-      self.assertEqual( makeUrl("tst"), "http://tst.fred.schema.org:8080", "URL should be 'http://tst.fred.schema.org:8080' for host fred.schema.org:8080.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.fred.schema.org:8080", "URL should be 'http://tst.fred.schema.org:8080' for host fred.schema.org:8080.")
 
       u.setupHostinfo(thing,"webschemas.org")
       self.assertEqual( getHostExt(), "", "host_ext should be empty for host webschemas.org.")
       self.assertEqual( getBaseHost(), "webschemas.org", "baseHost should be 'webschemas.org' for host webschemas.org.")
       self.assertEqual( getHostPort(), "80", "HostPort should be '80' for host webschemas.org.")
-      self.assertEqual( makeUrl("tst"), "http://tst.webschemas.org", "URL should be 'http://tst.webschemas.org' for host webschemas.org.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.webschemas.org", "URL should be 'http://tst.webschemas.org' for host webschemas.org.")
       
       u.setupHostinfo(thing,"bib.webschemas.org")
       self.assertEqual( getHostExt(), "bib", "host_ext should be 'bib' for host bib.webschemas.org.")
       self.assertEqual( getBaseHost(), "webschemas.org", "baseHost should be 'webschemas.org' for host bib.webschemas.org.")
       self.assertEqual( getHostPort(), "80", "HostPort should be '80' for host bib.webschemas.org.")
-      self.assertEqual( makeUrl("tst"), "http://tst.webschemas.org", "URL should be 'http://tst.webschemas.org' for host bib.webschemas.org.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.webschemas.org", "URL should be 'http://tst.webschemas.org' for host bib.webschemas.org.")
 
       u.setupHostinfo(thing,"fred.webschemas.org:8080")
       self.assertEqual( getHostExt(), "", "host_ext should be empty for host fred.webschemas.org:8080.")
       self.assertEqual( getBaseHost(), "fred.webschemas.org", "baseHost should be 'fred.webschemas.org' for host fred.webschemas.org:8080.")
       self.assertEqual( getHostPort(), "8080", "HostPort should be '8080' for host fred.webschemas.org:8080.")
-      self.assertEqual( makeUrl("tst"), "http://tst.fred.webschemas.org:8080", "URL should be 'http://tst.fred.webschemas.org:8080' for host fred.webschemas.org:8080.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.fred.webschemas.org:8080", "URL should be 'http://tst.fred.webschemas.org:8080' for host fred.webschemas.org:8080.")
       
       u.setupHostinfo(thing,"sdo-ganymede.appspot.com")
       self.assertEqual( getHostExt(), "", "host_ext should be empty for host sdo-ganymede.appspot.com.")
       self.assertEqual( getBaseHost(), "sdo-ganymede.appspot.com", "baseHost should be 'sdo-ganymede.appspot.com' for host sdo-ganymede.appspot.com.")
       self.assertEqual( getHostPort(), "80", "HostPort should be '80' for host sdo-ganymede.appspot.com.")
-      self.assertEqual( makeUrl("tst"), "http://tst.sdo-ganymede.appspot.com", "URL should be 'http://tst.sdo-ganymede.appspot.com' for host sdo-ganymede.appspot.com.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.sdo-ganymede.appspot.com", "URL should be 'http://tst.sdo-ganymede.appspot.com' for host sdo-ganymede.appspot.com.")
       
       u.setupHostinfo(thing,"bib.sdo-ganymede.appspot.com")
       self.assertEqual( getHostExt(), "bib", "host_ext should be 'bib' for host bib.sdo-ganymede.appspot.com.")
       self.assertEqual( getBaseHost(), "sdo-ganymede.appspot.com", "baseHost should be 'bib.sdo-ganymede.appspot.com' for host sdo-ganymede.appspot.com.")
       self.assertEqual( getHostPort(), "80", "HostPort should be '80' for host bib.sdo-ganymede.appspot.com.")
-      self.assertEqual( makeUrl("tst"), "http://tst.sdo-ganymede.appspot.com", "URL should be 'http://tst.sdo-ganymede.appspot.com' for host bib.sdo-ganymede.appspot.com.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.sdo-ganymede.appspot.com", "URL should be 'http://tst.sdo-ganymede.appspot.com' for host bib.sdo-ganymede.appspot.com.")
 
       u.setupHostinfo(thing,"fred.sdo-ganymede.appspot.com")
       self.assertEqual( getHostExt(), "", "host_ext should be empty for host fred.sdo-ganymede.appspot.com.")
       self.assertEqual( getBaseHost(), "fred.sdo-ganymede.appspot.com", "baseHost should be 'fred.sdo-ganymede.appspot.com' for host fred.sdo-ganymede.appspot.com.")
       self.assertEqual( getHostPort(), "80", "HostPort should be '80' for host fred.sdo-ganymede.appspot.com.")
-      self.assertEqual( makeUrl("tst"), "http://tst.fred.sdo-ganymede.appspot.com", "URL should be 'http://tst.fred.sdo-ganymede.appspot.com' for host fred.sdo-ganymede.appspot.com.")
+      self.assertEqual( makeUrl("tst",full=True), "http://tst.fred.sdo-ganymede.appspot.com", "URL should be 'http://tst.fred.sdo-ganymede.appspot.com' for host fred.sdo-ganymede.appspot.com.")
       
 
   def test_gotFooBarThing(self):
@@ -474,7 +474,7 @@ class SimpleSchemaIntegrityTests(unittest.TestCase):
     #@unittest.expectedFailure # "member and acceptsReservations need work"
     def test_propCommentCount(self):
       prop_comment_errors=[]
-      for p in GetSources ( Unit.GetUnit("typeOf"), Unit.GetUnit("rdf:Property") ):
+      for p in GetSources ( Unit.GetUnit("rdf:type"), Unit.GetUnit("rdf:Property") ):
         comments = GetTargets( Unit.GetUnit("rdfs:comment"), p )
         log.debug("property %s props %s" % (p.id, str(len(comments)) ))
         if len(comments) != 1:
@@ -484,7 +484,7 @@ class SimpleSchemaIntegrityTests(unittest.TestCase):
 
     def test_typeCommentCount(self):
       type_comment_errors=[]
-      for t in GetSources ( Unit.GetUnit("typeOf"), Unit.GetUnit("rdfs:Class") ):
+      for t in GetSources ( Unit.GetUnit("rdf:type"), Unit.GetUnit("rdfs:Class") ):
         comments = GetTargets( Unit.GetUnit("rdfs:comment"), t )
         log.debug(t.id + " " + str(len(comments)))
         if len(comments) != 1:
@@ -495,7 +495,7 @@ class SimpleSchemaIntegrityTests(unittest.TestCase):
     def test_enumValueCommentCount(self):
       enum_comment_errors=[]
       for e in GetSources ( Unit.GetUnit("rdfs:subClassOf"), Unit.GetUnit("Enumeration") ):
-        for ev in GetSources ( Unit.GetUnit("typeOf"), e ):
+        for ev in GetSources ( Unit.GetUnit("rdf:type"), e ):
           comments = GetTargets( Unit.GetUnit("rdfs:comment"), ev )
           log.debug("'%s' is an enumerated value of enum type %s with %s rdfs:comment definitions." % ( ev.id, e.id, str(len(comments)  )) )
           if len(comments) != 1:
@@ -506,9 +506,15 @@ class SimpleSchemaIntegrityTests(unittest.TestCase):
 class DataTypeTests(unittest.TestCase):
     def test_booleanDataType(self):
       self.assertTrue( Unit.GetUnit("Boolean").isDataType())
-      self.assertFalse(Unit.GetUnit("DataType").isDataType())
+      self.assertTrue(Unit.GetUnit("DataType").isDataType())
       self.assertFalse(Unit.GetUnit("Thing").isDataType())
       self.assertFalse(Unit.GetUnit("Duration").isDataType())
+
+class MarkDownTest(unittest.TestCase):
+    def test_emph(self):
+        markstring = "This is _em_, __strong__, ___strong em___"
+        html = Markdown.parse(markstring,True)
+        self.assertFalse(html != "<p>This is <em>em</em>, <strong>strong</strong>, <strong><em>strong em</em></strong></p>\n", "Markdown string not formatted correctly")
 
 class HasMultipleBaseTypesTests(unittest.TestCase):
 
@@ -531,7 +537,7 @@ class BasicJSONLDTests(unittest.TestCase):
     def test_issuedBy_jsonld(self):
        import json
        ctx = json.loads(GetJsonLdContext())
-       self.assertFalse( "issuedBy" in ctx["@context"] , "issuedBy should be defined." )
+       self.assertTrue( "issuedBy" in ctx["@context"] , "issuedBy should be defined." )
 
     def test_dateModified_jsonld(self):
        import json
